@@ -37,8 +37,8 @@
 /* **** Definitions **** */
 
 // SPI Communication Config
-#define SPI_SPEED           10000      // Bit Rate (Hz)
-#define MAX31723_SPI_REG    MXC_SPI1    // Set to SPI port
+#define SPI_SPEED           1000000      // Bit Rate (Hz)
+#define MAX31723_SPI_PORT    MXC_SPI1    // Set to SPI port
 #define SPI_NUM_PERIPHS     1
 
 typedef enum {
@@ -57,13 +57,63 @@ typedef enum {
 } spi_quad_mode_t;
 
 
-// Register Bitfields
+/*** Registers ***/
+
+// Note: These are read addresses. Change MSB (bit 7) = 1 for writes.
+#define MAX31723_REG_CONFIG_STATUS  ((uint8_t)0x00)
+#define MAX31723_REG_TEMP_LSB       ((uint8_t)0x01)
+#define MAX31723_REG_TEMP_MSB       ((uint8_t)0x02)
+#define MAX31723_REG_THIGH_LSB      ((uint8_t)0x03)
+#define MAX31723_REG_THIGH_MSB      ((uint8_t)0x04)
+#define MAX31723_REG_TLOW_LSB       ((uint8_t)0x05)
+#define MAX31723_REG_TLOW_MSB       ((uint8_t)0x06)
+
+/*** Register Bitfields ***/
+
+// MEMW: Memory write bit (Bit 6)
+// 0 = RAM, 1 = EEPROM
 typedef enum {
-    RES_9_BITS = 0,
-    RES_10_BITS = (0x1 << 1),
-    RES_11_BITS = (0x2 << 1),
-    RES_12_BITS = (0x3 << 1)
+    MAX31723_MEMWRITE_RAM = (0 << 6),
+    MAX31723_MEMWRITE_EEPROM = (1 << 6)
+} max31723_memwrite_t;
+
+// NVB: Nonvolatile memory busy flag (Bit 5)
+// 0 = NVM not busy.
+// 1 = NVM busy, there is a write to EEPROM memory cell in progress.
+typedef enum {
+    MAX31723_NVM_NOT_BUSY = (0 << 5),
+    MAX31723_NVM_BUSY     = (1 << 5)
+} max41723_nvmbusy_t;
+
+// 1SHOT: One-shot temperature conversion bit (Bit 4)
+// 0 = Disable, 1 = Enable one-shot
+typedef enum {
+    MAX31723_ONESHOT_DISABLE = (0 << 4),
+    MAX31723_ONESHOT_ENABLE = (1 << 4)
+} max31723_oneshot_t;
+
+// TM: Thermostat operating mode (Bit 3)
+// 0 = Comparator, 1 = Interrupt
+typedef enum {
+    MAX31723_THERMOSTAT_COMP_MODE = (0 << 3),
+    MAX31723_THERMOSTAT_INTR_MODE = (1 << 3)
+} max31723_thermostat_t;
+
+// R1:R0: Resolution bits (Bits 2:1)
+// 00 = 9 bits, 01 = 10 bits, 10 = 11 bits, 11 = 12 bits
+typedef enum {
+    MAX31723_RES_9_BITS = 0,
+    MAX31723_RES_10_BITS = (0x1 << 1),
+    MAX31723_RES_11_BITS = (0x2 << 1),
+    MAX31723_RES_12_BITS = (0x3 << 1)
 } max31723_resolution_t;
+
+// SD: Shutdown bit (Bit 0)
+// 0 = Continuous, 1 = 1-shot (shutdown)
+typedef enum {
+    MAX31723_SHUTDOWN_CONVERT_CONTINUOUS = 0,
+    MAX31723_SHUTDOWN_CONVERT_1SHOT = 1
+} max31723_shutdown_t;
 
 
 /* **** Functions **** */
@@ -116,5 +166,28 @@ uint8_t max31723_read_reg(uint8_t reg);
  * @param w_data The data byte to write to the specified register.
  */
 void max31723_write_reg(uint8_t reg, uint8_t w_data);
+
+/**
+ * @brief Reads a temperature value from the MAX31723 sensor, using LSB address as target.
+ *
+ * This function reads MSB and LSB temperature registers from the MAX31723, given an LSB.
+ * It combines MSB and LSB registers to form a complete 16-bit temperature value.
+ *
+ * @param lsb_address The LSB register address to read the temperature field from.
+ *
+ * @return The 16-bit temperature value read from the sensor.
+ */
+uint16_t max31723_read_temp_bytes(uint8_t lsb_address);
+
+/**
+ * @brief Writes a temperature value to a MAX31723 temperature field, using LSB address as target.
+ *
+ * This function writes the given 16-bit temperature value to the MAX31723 temperature registers specified by the provided LSB address.
+ * The value is split into MSB and LSB and written to the respective registers.
+ *
+ * @param lsb_address The LSB register address of the temperature value to target.
+ * @param temp_bytes The 16-bit temperature value to write to the sensor.
+ */
+void max31723_write_temp_bytes(uint8_t lsb_address, uint16_t temp_bytes);
 
 #endif

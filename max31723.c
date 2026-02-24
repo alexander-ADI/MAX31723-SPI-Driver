@@ -32,7 +32,7 @@ int max31723_spi_init()
 {
     // Initialize the SPI peripheral on the given port.
     int err;
-    err = MXC_SPI_Init(MAX31723_SPI_REG, 
+    err = MXC_SPI_Init(MAX31723_SPI_PORT, 
                        SPI_ROLE_MASTER, 
                        SPI_QUAD_MODE_OFF, 
                        SPI_NUM_PERIPHS, 
@@ -40,9 +40,9 @@ int max31723_spi_init()
                        SPI_SPEED);
     
     // Set SPI bus configuration.
-    MXC_SPI_SetMode(MAX31723_SPI_REG, SPI_MODE_3);
-    MXC_SPI_SetDataSize(MAX31723_SPI_REG, 8);     // 8-bit character size.
-    MXC_SPI_SetWidth(MAX31723_SPI_REG, SPI_WIDTH_STANDARD); // Width of data lines is
+    MXC_SPI_SetMode(MAX31723_SPI_PORT, SPI_MODE_3);
+    MXC_SPI_SetDataSize(MAX31723_SPI_PORT, 8);     // 8-bit character size.
+    MXC_SPI_SetWidth(MAX31723_SPI_PORT, SPI_WIDTH_STANDARD); // Width of data lines is
                                                             // standard MOSI/MISO; not quad.
 
     // Configure GPIO pins for SPI1.
@@ -55,7 +55,7 @@ int max31723_spi_init()
     MXC_GPIO_Config(&gpio_spi);
 
     // Write MAX31723 Config/Status register to reset to defaults.
-    max31723_write_reg(0x00, 0x00);
+    max31723_write_reg(0x00, 0x01);
     MXC_Delay(100);
 
     return err;
@@ -71,7 +71,7 @@ void max31723_write_reg(uint8_t reg, uint8_t data)
     
     // Create SPI request struct.
     mxc_spi_req_t spi_req = {
-        .spi =          MAX31723_SPI_REG,
+        .spi =          MAX31723_SPI_PORT,
         .txData =       tx_data, // Note: The name of an array is already a pointer.
         .rxData =       NULL,
         .txLen =        2, 
@@ -82,6 +82,9 @@ void max31723_write_reg(uint8_t reg, uint8_t data)
         .rxCnt =        0,
         .completeCB =   NULL
     };
+
+    // Wait if EEPROM is busy.
+    while(max31723_read_reg(MAX31723_REG_CONFIG_STATUS) & MAX31723_NVM_BUSY) {};
 
     // Initiate transaction.
     MXC_SPI_MasterTransaction(&spi_req);
@@ -104,7 +107,7 @@ uint8_t max31723_read_reg(uint8_t reg)
     
     // Create SPI request struct.
     mxc_spi_req_t r_req = {
-        .spi           = MAX31723_SPI_REG,
+        .spi           = MAX31723_SPI_PORT,
         .txData        = t_data,
         .rxData        = r_data,
         .txLen         = 2,
@@ -125,4 +128,27 @@ uint8_t max31723_read_reg(uint8_t reg)
 
     // Return read data (second byte of rx array).
     return r_data[1]; 
+}
+
+uint16_t max31723_read_temp_bytes(uint8_t lsb_address) {
+    // Read MSB and store in upper 8 bits
+    // MSB_Addr = LSB_Addr + 1
+    uint16_t temp = max31723_read_reg(lsb_address + 1) << 8;
+
+    // Read LSB --> Store in lower 8 bits
+    temp |= max31723_read_reg(lsb_address);
+    
+    return temp;
+}
+
+void max31723_write_temp_bytes(uint8_t lsb_address, uint16_t temp_bytes) {
+    // Break apart temp_bytes to MSB and LSB
+    uint8_t msb = temp_bytes >> 8;
+    uint8_t lsb = (uint8_t)temp_bytes;
+
+    // Write values to IC registers
+    max31723_write_reg(lsb_address+1, msb);  // MSB_Addr = LSB_Addr + 1
+    max31723_write_reg(lsb_address, lsb);
+    
+    return;
 }
